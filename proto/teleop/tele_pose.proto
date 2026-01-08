@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+import "foxglove/Pose.proto";
+
+package teleop;
+
+//   坐标系图示 (右手系):
+//     Y ↑
+//       |
+//       |
+//       |
+//       |
+//       +------→ X
+//      /
+//     /
+//    Z
+
+
+message TeleState {
+    // right arm
+    foxglove.Pose right_ee_pose = 1;
+    // right arm crtl
+    bool right_ctrl_trigger = 2;
+    double right_ctrl_trigger_value = 3;
+
+    bool right_ctrl_squeeze = 4;
+    double right_ctrl_squeeze_value = 5;
+
+    bool right_ctrl_thumbstick = 6;
+    repeated double right_ctrl_thumbstick_value = 7;
+
+    bool right_ctrl_a_button = 8;
+    bool right_ctrl_b_button = 9;
+
+    // left arm
+    foxglove.Pose left_ee_pose = 10;
+    // left arm crtl
+    bool left_ctrl_trigger = 11;
+    double left_ctrl_trigger_value = 12;
+
+    bool left_ctrl_squeeze = 13;
+    double left_ctrl_squeeze_value = 14;
+
+    bool left_ctrl_thumbstick = 15;
+    repeated double left_ctrl_thumbstick_value = 16;
+
+    bool left_ctrl_a_button = 17;
+    bool left_ctrl_b_button = 18;
+
+    // head pose
+    foxglove.Pose head_pose = 19;
+
+    // TODO: hand pose
+}

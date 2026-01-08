@@ -1,0 +1,23 @@
+from abc import ABC, abstractmethod
+from foxglove.Pose_pb2 import Pose
+
+class IKProcessor(ABC):
+    """数据处理的模板类"""
+    @abstractmethod
+    def process(self, left_ee_pose: Pose, right_ee_pose: Pose):  # 模板方法（不可重写）
+        pass
+
+class DemoTest(IKProcessor):
+    """具体实现类"""
+    def load_data(self):
+        print("加载CSV数据")
+
+    def clean_data(self):
+        print("清理CSV数据")
+
+    def analyze(self):
+        print("分析CSV数据")
+
+# # 使用
+# processor = CSVProcessor()
+# processor.process()
