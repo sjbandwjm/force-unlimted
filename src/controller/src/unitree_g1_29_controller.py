@@ -88,6 +88,7 @@ class UnitreeG129Controller(ControllerInterface):
 
     def Stop(self):
         logging.info("Stopping UnitreeG129Controller...")
+        # self._arm_ctrl.ctrl_dual_arm_go_home()
         if rclpy.ok():
             self.ros_node.get_logger().info("Stopping ROS spin...")
             rclpy.shutdown()
@@ -121,8 +122,8 @@ class UnitreeG129Controller(ControllerInterface):
         # clip_arm_q_target(target, vel)	内部工具	对目标角度做速度限制
         # _Is_weak_motor(id)	            内部工具	判断弱电机
         # _Is_wrist_motor(id)	            内部工具	判断手腕电机
-        self.arm_ctrl = G1_29_ArmController(motion_mode=self._motion_mode, simulation_mode=self._simulation_mode)
-        self.arm_ctrl.speed_gradual_max()
+        self._arm_ctrl = G1_29_ArmController(motion_mode=self._motion_mode, simulation_mode=self._simulation_mode)
+        self._arm_ctrl.speed_gradual_max()
 
     def __initRos(self):
         rclpy.init()
@@ -161,13 +162,13 @@ class UnitreeG129Controller(ControllerInterface):
     def __unitreeMsgPub(self):
         # get unitree msg and ros send
         if len(self._ik_sol.dual_arm_sol_q) >= 1:
-            self.arm_ctrl.ctrl_dual_arm(self._ik_sol.dual_arm_sol_q, self._ik_sol.dual_arm_sol_tauff)
-            logging.info(f"Unitree Msg pub")
+            self._arm_ctrl.ctrl_dual_arm(self._ik_sol.dual_arm_sol_q, self._ik_sol.dual_arm_sol_tauff)
+            # logging.info(f"Unitree Msg pub")
 
     def __rosMsgPub(self):
         msg = UInt8MultiArray()
-        current_lr_arm_q  = self.arm_ctrl.get_current_dual_arm_q()
-        current_lr_arm_dq = self.arm_ctrl.get_current_dual_arm_dq()
+        current_lr_arm_q  = self._arm_ctrl.get_current_dual_arm_q()
+        current_lr_arm_dq = self._arm_ctrl.get_current_dual_arm_dq()
 
         try:
             self._low_state.dual_arm_q.extend(current_lr_arm_q)
@@ -178,7 +179,7 @@ class UnitreeG129Controller(ControllerInterface):
         except Exception as e:
             logging.error(f'SerializeToString Protobuf failed: {e}')
         self._low_state.Clear()
-        logging.info(f"{UNITREE_IK_SOL_TOPIC} Msg pub")
+        # logging.info(f"{UNITREE_LOW_STATE_TOPIC} Msg pub")
 
 
 def ExtraContrilerArgs(parser):
