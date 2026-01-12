@@ -50,7 +50,18 @@ class IkNode(Node):
                 return
             current_state = TeleState()
             current_state.CopyFrom(self._state)
+        import time
+        ts = current_state.timestamp
+        ik_ms = ts.seconds * 1000000000 + ts.nanos
+        now_ms = time.time_ns()
+        delay_ms = now_ms - ik_ms
+        logging.info(f"process msg, {ik_ms} ms, {delay_ms / 1000000} ms")
         self._ik_processor.Process(current_state)
+        ts = current_state.timestamp
+        ik_ms = ts.seconds * 1000000000 + ts.nanos
+        now_ms = time.time_ns()
+        delay_ms = now_ms - ik_ms
+        logging.info(f"process msg, {ik_ms} ms, {delay_ms / 1000000} ms")
 
     def trackStateCallback(self, msg: UInt8MultiArray):
         state = TeleState()
@@ -61,6 +72,13 @@ class IkNode(Node):
             with self._state_lock:
                 self._state.CopyFrom(state)
                 self._state_flush_cnt += 1
+            import time
+            ts = state.timestamp
+            ik_ms = ts.seconds * 1000000000 + ts.nanos
+            now_ms = time.time_ns()
+            delay_ms = now_ms - ik_ms
+            logging.info(f"Callback msg, {ik_ms} ms, {delay_ms / 1000000} ms")
+            
         except Exception as e:
             self.get_logger().error(f'解析 Protobuf 失败: {e}')
 
