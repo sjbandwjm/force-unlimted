@@ -1,4 +1,5 @@
 import threading
+import time
 import logging
 import numpy as np
 from rclpy.node import Node
@@ -64,6 +65,8 @@ class G129IkProcessor(IKProcessor):
         sol_q, sol_tuaff = self._arm_ik.solve_ik(left_ee_mat_robot, right_ee_mat_robot, cur_dual_arm_q, cur_dual_arm_dq)
 
         msg = UnitTreeIkSol()
+        msg.timestamp.seconds = time.time_ns() // 1_000_000_000
+        msg.timestamp.nanos = time.time_ns() % 1_000_000_000
         msg.dual_arm_sol_q.extend(sol_q)
         msg.dual_arm_sol_tauff.extend(sol_tuaff)
         self._publisher.publish(UInt8MultiArray(data=msg.SerializeToString()))

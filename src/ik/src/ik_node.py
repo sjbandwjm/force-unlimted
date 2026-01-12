@@ -29,6 +29,7 @@ from ik.src.ik_processor_base import IKProcessor
 class IkNode(Node):
     def __init__(self, args: argparse.Namespace):
         super().__init__('ik_node')
+        logging.info(f"IK Node frequency set to: {args.frequency} Hz")
         self._subscription = self.create_subscription(
             UInt8MultiArray,
             TRACK_STATE_TOPIC,

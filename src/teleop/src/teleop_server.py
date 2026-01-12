@@ -6,8 +6,9 @@ if project_root not in sys.path:
 sys.path.insert(0, os.path.join(project_root, '../proto/generate'))
 
 import argparse
-import logging
+import time
 
+import logging
 from multiprocessing_logging import install_mp_handler
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +69,8 @@ class TeleopPublisher(Node):
 
     def _timer_pub_callback(self):
         state = TeleState()
+        state.timestamp.seconds = time.time_ns() // 1_000_000_000
+        state.timestamp.nanos = time.time_ns() % 1_000_000_000
         # right arm
         state.right_ctrl_trigger = self.tv.right_ctrl_trigger
         state.right_ctrl_trigger_value = self.tv.right_ctrl_triggerValue
@@ -109,7 +112,7 @@ class TeleopPublisher(Node):
         # 注意：Python 的 bytes 需要转换成 list(int) 供 ROS 2 使用
         ros_msg.data = list(binary_data)
         self._publisher.publish(ros_msg)
-        self.get_logger().debug('Publishing: "%s"' % ros_msg.data)
+        # self.get_logger().debug('Publishing: "%s"' % ros_msg.data)
 
 def main():
     parser = argparse.ArgumentParser()

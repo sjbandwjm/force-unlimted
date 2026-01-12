@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "foxglove/Pose.proto";
+import "google/protobuf/timestamp.proto";
 
 package teleop;
 
@@ -58,5 +59,6 @@ message TeleState {
     // head pose
     foxglove.Pose head_pose = 19;
 
+    google.protobuf.Timestamp timestamp = 20;
     // TODO: hand pose
 }

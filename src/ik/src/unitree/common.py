@@ -1,7 +1,6 @@
 UNITREE_IK_SOL_TOPIC = "/unitree/ik_sol"
 UNITREE_LOW_STATE_TOPIC = "/unitree/low_state"
 
-
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from foxglove.Pose_pb2 import Pose
