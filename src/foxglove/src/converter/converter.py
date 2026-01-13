@@ -6,7 +6,7 @@ from .handlers import *
 
 FUNCITONS = {
     "/teleop/track_state": TeleopTrackState,
-    "/unitree/ik_sol": UnitreeIKsol,
+    "/unitree/ik/sol": UnitreeIKsol,
     "/unitree/fk/tfs": UnitreeFKtfs,
     "/unitree/low_state": UnitreeLowState,
     "/unitree/head_frame": ImageFrame,

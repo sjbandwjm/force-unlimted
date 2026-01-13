@@ -1,5 +1,6 @@
-UNITREE_IK_SOL_TOPIC = "/unitree/ik_sol"
-UNITREE_LOW_STATE_TOPIC = "/unitree/low_state"
+UNITREE_IK_SOL_TOPIC = "/unitree/ik/sol"
+UNITREE_LOW_STATE_TOPIC = "/unitree/controller/low_state"
+# UNITREE_DEBUG_TOPIC = "/unitree/ik/debug_info"
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R

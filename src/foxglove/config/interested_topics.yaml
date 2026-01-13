@@ -1,6 +1,6 @@
 topics:
   - /teleop/track_state
   - /unitree/ik_sol
-  - /unitree/low_state
+  - /unitree/ik/sol
   - /unitree/fk/tfs
   - /unitree/head_frame

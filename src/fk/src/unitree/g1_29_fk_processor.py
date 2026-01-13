@@ -22,7 +22,6 @@ class G129FKProcessor(FKProcessor):
     def __init__(self, node: Node):
         super().__init__()
         self._node = node
-
         # low state
         self._subscription = node.create_subscription(
             UInt8MultiArray,
@@ -68,17 +67,18 @@ class G129FKProcessor(FKProcessor):
             return
 
     def Process(self, tele_state: TeleState):
-        with self._low_state_lock:
-            low_state_copy = UnitTreeLowState()
-            low_state_copy.CopyFrom(self._low_state)
-        cur_dual_arm_q = np.array(low_state_copy.dual_arm_q) if len(low_state_copy.dual_arm_q) == 14 else None
-        # cur_dual_arm_dq = np.array(low_state_copy.dual_arm_dq) if len(low_state_copy.dual_arm_dq) == 14 else None
-
-        with self._ik_sol_lock:
-            ik_sol_q = np.array(self._ik_sol.dual_arm_sol_q, dtype=np.float64)
+        if self._node.args.use_ik_sol:
+            with self._ik_sol_lock:
+                input_q = np.array(self._ik_sol.dual_arm_sol_q, dtype=np.float64)
+        else:
+            with self._low_state_lock:
+                low_state_copy = UnitTreeLowState()
+                low_state_copy.CopyFrom(self._low_state)
+            input_q = np.array(low_state_copy.dual_arm_q) if len(low_state_copy.dual_arm_q) == 14 else None
+            # cur_dual_arm_dq = np.array(low_state_copy.dual_arm_dq) if len(low_state_copy.dual_arm_dq) == 14 else None
 
         # ik_sol fk
-        tfs = self._arm_fk.compute_all_fk(ik_sol_q)
+        tfs = self._arm_fk.compute_all_fk(input_q)
         # print(len(tfs), tfs.keys())
         if tfs is None:
             return
@@ -86,6 +86,8 @@ class G129FKProcessor(FKProcessor):
         tf = FrameTransform()
         tf.parent_frame_id = "world"
         tf.child_frame_id = "robot"
+        tf.translation.z = 0.7
+        tf.translation.x = -0.1
         msg.transforms.append(tf)
         for link_name, pose in tfs.items():
             translation = pose.translation  # numpy array [x, y, z]

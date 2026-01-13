@@ -1,11 +1,17 @@
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
-
+import "foxglove/Pose.proto";
 package ik;
+
+message DebugInfo {
+    repeated double left_ee_pose = 1;
+    repeated double right_ee_pose = 2;
+}
 
 message UnitTreeIkSol {
     google.protobuf.Timestamp timestamp = 1;
     repeated double dual_arm_sol_q = 2;
     repeated double dual_arm_sol_tauff = 3;
+    DebugInfo debug_info = 4;
 }

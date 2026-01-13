@@ -40,7 +40,7 @@ class FkNode(Node):
         self._state = TeleState()
         self._state_flush_cnt: np.uint = 0
         self._state_prev_cnt: np.uint = 0
-
+        self.args = args
         self._ik_timer = self.create_timer(1.0 / args.frequency, self.fkProcessCallback)
         from fk.src.unitree.g1_29_fk_processor import G129FKProcessor
         self._ik_processor: FKProcessor = G129FKProcessor(self)
@@ -73,6 +73,7 @@ class FkNode(Node):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--frequency", type=float, default=30.0, help="Publishing frequency in Hz")
+    parser.add_argument("--use_ik_sol", action='store_true', help="use ik solve node state for FK")
     parser.add_argument('--log_level', type=str, default='info', help='Logging level')
 
     args, other_args = parser.parse_known_args()

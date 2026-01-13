@@ -69,5 +69,7 @@ class G129IkProcessor(IKProcessor):
         msg.timestamp.nanos = time.time_ns() % 1_000_000_000
         msg.dual_arm_sol_q.extend(sol_q)
         msg.dual_arm_sol_tauff.extend(sol_tuaff)
+        msg.debug_info.left_ee_pose.extend(left_ee_mat_robot.flatten())
+        msg.debug_info.right_ee_pose.extend(right_ee_mat_robot.flatten())
         self._publisher.publish(UInt8MultiArray(data=msg.SerializeToString()))
         logging.debug(f'Published IK solution {sol_q}, {sol_tuaff}')

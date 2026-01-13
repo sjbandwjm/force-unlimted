@@ -9,6 +9,8 @@ from foxglove.Quaternion_pb2 import Quaternion
 from foxglove.Vector3_pb2 import Vector3
 from foxglove.RawImage_pb2 import RawImage
 
+from foxglove.src.common.utils import *
+
 def TeleopTrackState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
     from teleop.tele_pose_pb2 import TeleState
     msg = TeleState()
@@ -52,11 +54,42 @@ def TeleopTrackState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
 
 def UnitreeIKsol(inmsg: InMessage, callback: Callable[[OutMessage], None]):
     from ik.ik_sol_pb2 import UnitTreeIkSol
+    msg = UnitTreeIkSol()
+    msg.ParseFromString(inmsg.data)
+
     out = OutMessage()
     out.channel = inmsg.topic
     out.timestamp_ns = inmsg.timestamp_ns
-    out.data = inmsg.data
-    out.type = UnitTreeIkSol()
+    out.data = msg
+    # out.type = UnitTreeIkSol()
+    callback(out)
+
+    tfs = FrameTransforms()
+    out.channel = inmsg.topic + ":tfs"
+    out.timestamp_ns = inmsg.timestamp_ns
+
+    left_pose = Matrix2Pose(np.array(msg.debug_info.left_ee_pose).reshape(4, 4))
+    tfs.transforms.append(
+        FrameTransform(
+            timestamp=TimeNs2GoogleTs(inmsg.timestamp_ns),
+            parent_frame_id="robot",
+            child_frame_id="left_ee_sol",
+            translation=left_pose.position,
+            rotation=left_pose.orientation
+        )
+    )
+
+    right_pose = Matrix2Pose(np.array(msg.debug_info.right_ee_pose).reshape(4, 4))
+    tfs.transforms.append(
+        FrameTransform(
+            timestamp=TimeNs2GoogleTs(inmsg.timestamp_ns),
+            parent_frame_id="robot",
+            child_frame_id="reft_ee_sol",
+            translation=right_pose.position,
+            rotation=right_pose.orientation
+        )
+    )
+    out.data =tfs
     callback(out)
 
 def UnitreeFKtfs(inmsg: InMessage, callback: Callable[[OutMessage], None]):
