@@ -8,7 +8,7 @@ from std_msgs.msg import UInt8MultiArray
 from thirdparty_sdk.unitree.robot_arm_ik import G1_29_ArmIK
 from ik.src.ik_processor_base import IKProcessor
 from ik.src.unitree.common import UNITREE_LOW_STATE_TOPIC, UNITREE_IK_SOL_TOPIC
-from ik.src.unitree.common import Unitree2RobotForEEPose, Pose2matrix, Matrix2Pose
+from ik.src.unitree.common import Unitree2RobotForEEPose, Pose2matrix
 from foxglove.Pose_pb2 import Pose
 from teleop.tele_pose_pb2 import TeleState
 from controller.state_pb2 import UnitTreeLowState

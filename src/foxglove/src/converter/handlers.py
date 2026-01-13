@@ -48,3 +48,29 @@ def TeleopTrackState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
     out1.timestamp_ns = inmsg.timestamp_ns
     out1.data = msg
     callback(out1)
+
+def UnitreeIKsol(inmsg: InMessage, callback: Callable[[OutMessage], None]):
+    from ik.ik_sol_pb2 import UnitTreeIkSol
+    out = OutMessage()
+    out.channel = inmsg.topic
+    out.timestamp_ns = inmsg.timestamp_ns
+    out.data = inmsg.data
+    out.type = UnitTreeIkSol()
+    callback(out)
+
+def UnitreeFKtfs(inmsg: InMessage, callback: Callable[[OutMessage], None]):
+    out = OutMessage()
+    out.channel = inmsg.topic
+    out.timestamp_ns = inmsg.timestamp_ns
+    out.data = inmsg.data
+    out.type = FrameTransforms()
+    callback(out)
+
+def UnitreeLowState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
+    from controller.state_pb2 import UnitTreeLowState
+    out = OutMessage()
+    out.channel = inmsg.topic
+    out.timestamp_ns = inmsg.timestamp_ns
+    out.data = inmsg.data
+    out.type = UnitTreeLowState()
+    callback(out)

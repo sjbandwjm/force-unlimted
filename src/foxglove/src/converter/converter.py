@@ -6,6 +6,9 @@ from .handlers import *
 
 FUNCITONS = {
     "/teleop/track_state": TeleopTrackState,
+    "/unitree/ik_sol": UnitreeIKsol,
+    "/unitree/fk/tfs": UnitreeFKtfs,
+    "/unitree/low_state": UnitreeLowState,
 }
 
 class Converter:
@@ -15,6 +18,7 @@ class Converter:
     def Convert(self, data: InMessage, callback=None):
         if data.topic in FUNCITONS:
             FUNCITONS[data.topic](data, callback)
+            # print(data.topic)
         else:
             logging.warning(f"cant processor this topic {data.topic}")
 

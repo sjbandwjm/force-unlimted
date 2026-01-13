@@ -4,6 +4,7 @@ import base64
 
 from foxglove_websocket import run_cancellable
 from foxglove_websocket.server import FoxgloveServer, FoxgloveServerListener
+from google.protobuf.message import Message
 
 from .processor_base import FoxgloveProcessor
 from .message import OutMessage
@@ -25,20 +26,27 @@ class WebsocketProcessor(FoxgloveProcessor, FoxgloveServerListener):
 
     async def process(self, msg: OutMessage):
         if msg.channel not in self._channels:
-            fds = collect_schema_with_deps(msg.data.DESCRIPTOR.file)
+            if isinstance(msg.type, Message):
+                desc = msg.type.DESCRIPTOR
+            else:
+                desc = msg.data.DESCRIPTOR
+            fds = collect_schema_with_deps(desc.file)
             id = await self._server.add_channel({
                 "topic": msg.channel,
                 "encoding": "protobuf",
-                "schemaName": msg.data.DESCRIPTOR.full_name,
+                "schemaName": desc.full_name,
                 "schema": base64.b64encode(fds.SerializeToString()).decode("utf-8"),
             })
             self._channels[msg.channel] = id
             self._channel_ids[id] = msg.channel
-            logging.info(f"websocket register new schema {msg.channel} {msg.data.DESCRIPTOR.full_name}")
+            logging.info(f"websocket register new schema {msg.channel} {desc.full_name}")
         else:
             id = self._channels[msg.channel]
         # print(id, msg.data.DESCRIPTOR.full_name)
-        await self._server.send_message(id, msg.timestamp_ns, msg.data.SerializeToString())
+        if isinstance(msg.data, bytes):
+            await self._server.send_message(id, msg.timestamp_ns, msg.data)
+        else:
+            await self._server.send_message(id, msg.timestamp_ns, msg.data.SerializeToString())
 
     def on_subscribe(self, server, channel_id):
         logging.info(f"websocket on sub {self._channel_ids[channel_id]} {channel_id}")

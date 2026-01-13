@@ -7,6 +7,7 @@ class OutMessage:
     channel: str
     data: bytes | google.protobuf.message.Message
     timestamp_ns: int
+    type: None | google.protobuf.message.Message = None
 
 # @dataclass
 class InMessage:
