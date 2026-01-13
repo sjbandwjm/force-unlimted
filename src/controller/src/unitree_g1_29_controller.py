@@ -82,7 +82,7 @@ from base.utils import BuildArgParser, RegisterShutDownHook, SaveImage, Str2Bool
 # ROS2 Topic 定义
 # =========================
 # sub_topic
-UNITREE_IK_SOL_TOPIC    = "/unitree/ik_sol"     # 上位机 IK 求解结果
+UNITREE_IK_SOL_TOPIC    = "/unitree/ik/sol"     # 上位机 IK 求解结果
 TRACK_STATE_TOPIC       = '/teleop/track_state' # 遥操作/状态机控制信号
 # pub topic
 UNITREE_LOW_STATE_TOPIC = "/unitree/controller/low_state"  # 机器人双臂当前状态
