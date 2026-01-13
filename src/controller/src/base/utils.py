@@ -10,6 +10,23 @@ from datetime import datetime
 import numpy as np
 from typing import Callable, Optional
 
+def Str2Bool(v):
+    """
+    Convert string input from argparse to boolean
+    Accepts: 'true', 't', '1', 'yes' → True
+             'false', 'f', '0', 'no' → False
+    Case insensitive.
+    """
+    if isinstance(v, bool):
+        return v
+    v = v.lower()
+    if v in ('yes', 'true', 't', '1'):
+        return True
+    elif v in ('no', 'false', 'f', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError(f"Boolean value expected, got '{v}'")
+
 def BuildArgParser(extra_args_fn: Optional[Callable[[argparse.ArgumentParser], None]] = None) -> argparse.ArgumentParser:
     """
     构建基础的 argparse Parser

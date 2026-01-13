@@ -5,11 +5,13 @@ Unitree G1-29 双臂控制桥接节点
 1. 通过 Unitree DDS SDK 控制真实/仿真 G1 机器人双臂
 2. 订阅 ROS2 上位机发送的 IK 解算结果 (protobuf over UInt8MultiArray)
 3. 周期性发布机器人当前双臂状态 (protobuf over UInt8MultiArray)
-4. 内部启动 DDS 控制线程 + ROS2 spin 线程
+4. 可选：获取头部相机图像并发布到 ROS2
+5. 内部启动 DDS 控制线程 + ROS2 spin 线程
 
-整体架构:
+数据流：
 ROS2 IK_SOL_TOPIC  --->  本节点  ---> Unitree DDS ArmController
 Unitree DDS State  --->  本节点  ---> ROS2 LOW_STATE_TOPIC
+Teleimager Head Camera ---> 本节点 ---> ROS2 HEAD_FRAME_TOPIC
 """
 
 import os
@@ -27,32 +29,47 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(this_file), '../..')
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, '../proto/generate'))
+
+# =========================
+# 引入 Protobuf 消息
+# =========================
 from controller.state_pb2 import UnitTreeLowState
 from ik.ik_sol_pb2 import UnitTreeIkSol
 from teleop.tele_pose_pb2 import TeleState
 from image.image_pb2 import ImageFrame
 
+# =========================
+# Unitree DDS SDK
+# =========================
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize # dds
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import ( LowCmd_  as hg_LowCmd, LowState_ as hg_LowState) # idl for g1, h1_2
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from thirdparty_sdk.unitree.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
 from thirdparty_sdk.unitree.robot_hand_unitree import Dex1_1_Gripper_Controller
 
-# teleimager package
+# =========================
+# 图像 teleimager package
+# =========================
 TELEIMAGER_PATH = os.path.join(project_root, "thirdparty_sdk/unitree/teleimager/src")
 if TELEIMAGER_PATH not in sys.path:
     sys.path.insert(0, TELEIMAGER_PATH)
 from teleimager.image_client import ImageClient
 
+
+# =========================
+# 多进程日志与 ROS2
+# =========================
 from multiprocessing import Value, Array, Lock
 from multiprocessing_logging import install_mp_handler
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, UInt8MultiArray
 
-
+# =========================
+# 工具函数
+# =========================
 from base.controller_interface import ControllerInterface
-from base.utils import BuildArgParser, RegisterShutDownHook, SaveImage
+from base.utils import BuildArgParser, RegisterShutDownHook, SaveImage, Str2Bool
 
 # from loguru import logger
 # logger.debug(f"asdfasd {self.subscriber_list_}")
@@ -78,6 +95,19 @@ install_mp_handler()
 
 
 class UnitreeG129Controller(ControllerInterface):
+    """
+    Unitree G1-29 双臂控制器桥接节点
+    
+    参数:
+        motion_mode (bool)       : True 使用动作模式, False 使用位置模式
+        simulation_mode (bool)   : True 仿真模式, False 实机模式
+        unitree_dds_fps (int)    : DDS 控制频率 (Hz) [未启用]
+        ros_msg_fps (int)        : ROS2 状态消息发布频率 (Hz)
+        open_img_pub (bool)      : 是否启用头部相机帧发布
+        image_encode (bool)      : True 发布 JPEG, False 发布 H265
+        image_fps (int)          : 相机帧发布频率 (Hz)
+        img_server_ip (str)      : 图像服务器 IP
+    """
     def __init__(self, config):
         super().__init__(config)
 
@@ -292,15 +322,14 @@ class UnitreeG129Controller(ControllerInterface):
             logging.info(f"Pub {UNITREE_HEAD_FRAME} msg")
 
 
-
 def ExtraContrilerArgs(parser):
     parser.description = "Unitree G1 specific controller"
-    parser.add_argument("--motion_mode", type=bool, default=False, choices=["True", "False"], help="Unitree arm control motion_mode")
-    parser.add_argument("--simulation_mode", type=bool, default=True, choices=["True", "False"], help="Unitree arm control simulation_mode, control Unitree dds, True mean dimain_id 1 else 0")
+    parser.add_argument("--motion_mode", type=Str2Bool, default=False, help="Unitree arm control motion_mode")
+    parser.add_argument("--simulation_mode", type=Str2Bool, default=True, help="Unitree arm control simulation_mode, control Unitree dds, True mean dimain_id 1 else 0")
     parser.add_argument("--unitree_dds_fps", type=int, default=30, help="Unitree dds fps for simulation")
     parser.add_argument("--ros_msg_fps", type=int, default=30, help="Ros msg fps for other subscribe")
-    parser.add_argument("--open_img_pub", type=bool, default=False, help="If open image pub")
-    parser.add_argument("--image_encode", type=bool, default=False, help="Image_encode for H265")
+    parser.add_argument("--open_img_pub", type=Str2Bool, default=False, help="If open image pub")
+    parser.add_argument("--image_encode", type=Str2Bool, default=False, help="Image_encode for H265")
     parser.add_argument("--image_fps", type=int, default=10, help="Image pub fps")
     parser.add_argument("--img_server_ip", type=str, default="10.106.1.95", help="IP address of image server, used by teleimager and televuer")
 
