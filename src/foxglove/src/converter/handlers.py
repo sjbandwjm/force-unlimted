@@ -44,6 +44,12 @@ def TeleopTrackState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
     tf.translation.CopyFrom(msg.right_ee_pose.position)
     tf.rotation.CopyFrom(msg.right_ee_pose.orientation)
     out.data.transforms.append(tf)
+    # head pose
+    tf.parent_frame_id = "webxr"
+    tf.child_frame_id = "head_ee"
+    tf.translation.CopyFrom(msg.head_pose.position)
+    tf.rotation.CopyFrom(msg.head_pose.orientation)
+    out.data.transforms.append(tf)
     callback(out)
 
     out1 = OutMessage()
@@ -57,17 +63,18 @@ def UnitreeIKsol(inmsg: InMessage, callback: Callable[[OutMessage], None]):
     msg = UnitTreeIkSol()
     msg.ParseFromString(inmsg.data)
 
-    out = OutMessage()
-    out.channel = inmsg.topic
-    out.timestamp_ns = inmsg.timestamp_ns
-    out.data = msg
+    out1 = OutMessage()
+    out1.channel = inmsg.topic
+    out1.timestamp_ns = inmsg.timestamp_ns
+    out1.data = msg
     # out.type = UnitTreeIkSol()
-    callback(out)
+    callback(out1)
 
-    tfs = FrameTransforms()
+    out = OutMessage()
     out.channel = inmsg.topic + ":tfs"
     out.timestamp_ns = inmsg.timestamp_ns
 
+    tfs = FrameTransforms()
     left_pose = Matrix2Pose(np.array(msg.debug_info.left_ee_pose).reshape(4, 4))
     tfs.transforms.append(
         FrameTransform(
