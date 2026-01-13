@@ -23,6 +23,8 @@ install_mp_handler()
 
 from common.processor_base import FoxgloveProcessor
 from common.message import OutMessage, InMessage
+from common.async_loop import AsyncManager
+
 class FoxgloveNode(Node):
     def __init__(self, args: argparse.Namespace):
         super().__init__('foxglove_node')
@@ -45,12 +47,7 @@ class FoxgloveNode(Node):
         except Exception as e:
             raise ValueError(f"Failed to load interested topics config {e}")
 
-        # 获取当前的 asyncio loop
-        # try:
-        #     self._loop = asyncio.get_event_loop()
-        # except RuntimeError as e:
-        #     print(f"{e}")
-        #     self._loop = asyncio.new_event_loop()
+        self._async_manager = AsyncManager()
 
         self._subs = []
         for topic in config['topics']:
@@ -76,16 +73,7 @@ class FoxgloveNode(Node):
                 # 如果 Process 也是耗时的，可以考虑将其也放入异步
                 self._processor.Process(out_msg)
 
-            converter.Convert(in_msg, cb)
-            # if self._loop.is_running():
-            #     # 我们调用之前写好的非阻塞 Convert
-            #     self._loop.call_soon_threadsafe(
-            #         lambda: converter.Convert(in_msg, cb)
-            #     )
-            # else:
-            #     # 如果 loop 没跑起来（比如纯同步环境），降级直接运行
-            #     # 但这通常不符合你的预期，建议确保 loop 在后台运行
-            #     print("Warning: asyncio loop is not running")
+            self._async_manager.run(converter.Convert(in_msg, cb))
 
         return callback
 
