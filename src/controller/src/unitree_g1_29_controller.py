@@ -20,6 +20,7 @@ import time
 import logging
 import threading
 from functools import partial
+from array import array
 
 # =========================
 # 路径设置：确保 protobuf 生成文件可被导入
@@ -115,7 +116,8 @@ class UnitreeG129Controller(ControllerInterface):
         self._publisher_control = {}
         self._ik_sol      = UnitTreeIkSol()
         self._low_state   = UnitTreeLowState()
-        self._image_state = ImageFrame()
+        temp_image_state = ImageFrame()
+        self._image_msg   = UInt8MultiArray()
 
         self._motion_mode     = config.get("motion_mode", bool)
         self._simulation_mode = config.get("simulation_mode", bool)
@@ -288,35 +290,34 @@ class UnitreeG129Controller(ControllerInterface):
         img, fps  = self._img_client.get_head_frame()
 
         if img is not None:
+            temp_image_state = ImageFrame()
             timestamp = time.time_ns()
-            self._image_state.timestamp.seconds = timestamp // 1_000_000_000
-            self._image_state.timestamp.nanos = timestamp % 1_000_000_000
+            temp_image_state.timestamp.seconds = timestamp // 1_000_000_000
+            temp_image_state.timestamp.nanos = timestamp % 1_000_000_000
 
-            self._image_state.frame_id = UNITREE_HEAD_FRAME
-            self._image_state.width    = img.shape[1]
-            self._image_state.height   = img.shape[0]
-            self._image_state.channels = img.shape[2]
+            temp_image_state.frame_id = UNITREE_HEAD_FRAME
+            temp_image_state.width    = img.shape[1]
+            temp_image_state.height   = img.shape[0]
+            temp_image_state.channels = img.shape[2]
 
             if not self._image_encode:
-                self._image_state.pixel_format = ImageFrame.BGR8
-                self._image_state.encoding = ImageFrame.ENCODING_H265
-                self._image_state.data = img.tobytes()
+                temp_image_state.pixel_format = ImageFrame.BGR8
+                temp_image_state.encoding = ImageFrame.ENCODING_H265
+                temp_image_state.data = img.tobytes()
             else:
-                self._image_state.pixel_format = ImageFrame.BGR8
-                self._image_state.encoding     = ImageFrame.ENCODING_JPEG
-                self._image_state.data = img.tobytes()
+                temp_image_state.pixel_format = ImageFrame.BGR8
+                temp_image_state.encoding     = ImageFrame.ENCODING_JPEG
+                temp_image_state.data = img.tobytes()
 
-            self._image_state.fps = fps
-            self._image_state.camera_model = "teleimager"
+            temp_image_state.fps = fps
+            temp_image_state.camera_model = "teleimager"
 
             try:
-                msg = UInt8MultiArray()
-                binary_data = self._image_state.SerializeToString()
-                msg.data = list(binary_data)
-                self._publisher_control[UNITREE_HEAD_FRAME].publish(msg)
+                self._image_msg.data = array('B', temp_image_state.SerializeToString())
+                self._publisher_control[UNITREE_HEAD_FRAME].publish(self._image_msg)
             except Exception as e:
                 logging.error(f'SerializeToString Protobuf failed: {e}')
-            self._image_state.Clear()
+            temp_image_state.Clear()
             # SaveImage(img)
         if self._msg_count % 100 > 90:
             logging.info(f"Pub {UNITREE_HEAD_FRAME} msg")
