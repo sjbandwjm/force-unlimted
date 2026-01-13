@@ -12,25 +12,12 @@ ROS2 IK_SOL_TOPIC  --->  本节点  ---> Unitree DDS ArmController
 Unitree DDS State  --->  本节点  ---> ROS2 LOW_STATE_TOPIC
 """
 
-from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize # dds
-from unitree_sdk2py.idl.unitree_hg.msg.dds_ import ( LowCmd_  as hg_LowCmd, LowState_ as hg_LowState) # idl for g1, h1_2
-from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
-from unitree.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
-
 import os
 import sys
 import time
 import logging
 import threading
 from functools import partial
-from multiprocessing_logging import install_mp_handler
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String, UInt8MultiArray
-
-
-from base.controller_interface import ControllerInterface
-from base.utils import BuildArgParser, RegisterShutDownHook
 
 # =========================
 # 路径设置：确保 protobuf 生成文件可被导入
@@ -42,6 +29,23 @@ if project_root not in sys.path:
 sys.path.insert(0, os.path.join(project_root, '../proto/generate'))
 from controller.state_pb2 import UnitTreeLowState
 from ik.ik_sol_pb2 import UnitTreeIkSol
+from teleop.tele_pose_pb2 import TeleState
+
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize # dds
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import ( LowCmd_  as hg_LowCmd, LowState_ as hg_LowState) # idl for g1, h1_2
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from thirdparty_sdk.unitree.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
+from thirdparty_sdk.unitree.robot_hand_unitree import Dex1_1_Gripper_Controller
+
+from multiprocessing import Value, Array, Lock
+from multiprocessing_logging import install_mp_handler
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, UInt8MultiArray
+
+
+from base.controller_interface import ControllerInterface
+from base.utils import BuildArgParser, RegisterShutDownHook
 
 # from loguru import logger
 # logger.debug(f"asdfasd {self.subscriber_list_}")
@@ -73,7 +77,6 @@ class UnitreeG129Controller(ControllerInterface):
         self._publisher_control = {}
         self._ik_sol      = UnitTreeIkSol()
         self._low_state   = UnitTreeLowState()
-        self._state_lock = threading.Lock()
 
         self._motion_mode     = config.get("motion_mode", bool)
         self._simulation_mode = config.get("simulation_mode", bool)
@@ -88,6 +91,7 @@ class UnitreeG129Controller(ControllerInterface):
 
     def Stop(self):
         logging.info("Stopping UnitreeG129Controller...")
+        # self._arm_ctrl.ctrl_dual_arm_go_home()
         if rclpy.ok():
             self.ros_node.get_logger().info("Stopping ROS spin...")
             rclpy.shutdown()
@@ -121,8 +125,16 @@ class UnitreeG129Controller(ControllerInterface):
         # clip_arm_q_target(target, vel)	内部工具	对目标角度做速度限制
         # _Is_weak_motor(id)	            内部工具	判断弱电机
         # _Is_wrist_motor(id)	            内部工具	判断手腕电机
-        self.arm_ctrl = G1_29_ArmController(motion_mode=self._motion_mode, simulation_mode=self._simulation_mode)
-        self.arm_ctrl.speed_gradual_max()
+        self._arm_ctrl = G1_29_ArmController(motion_mode=self._motion_mode, simulation_mode=self._simulation_mode)
+        self._arm_ctrl.speed_gradual_max()
+
+        self._left_gripper_value = Value('d', 0.0, lock=True)        # [input]
+        self._right_gripper_value = Value('d', 0.0, lock=True)       # [input]
+        self._dual_gripper_data_lock = Lock()
+        self._dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
+        self._dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
+        self._gripper_ctrl = Dex1_1_Gripper_Controller(self._left_gripper_value, self._right_gripper_value, self._dual_gripper_data_lock, 
+                                                     self._dual_gripper_state_array, self._dual_gripper_action_array, simulation_mode=self._simulation_mode)
 
     def __initRos(self):
         rclpy.init()
@@ -136,40 +148,82 @@ class UnitreeG129Controller(ControllerInterface):
         self._ros_thread = threading.Thread(target=self.__rosSpin, daemon=True)
         self._ros_thread.start()
 
-        self._unitree_timer = self.ros_node.create_timer(1.0 / self._unitree_dds_fps, self.__unitreeMsgPub)
+        # self._unitree_timer = self.ros_node.create_timer(1.0 / self._unitree_dds_fps, self.__unitreeMsgPub)
         self._msg_timer = self.ros_node.create_timer(1.0 / self._ros_msg_fps, self.__rosMsgPub)
 
     def __messageCallback(self, topic_name, msg):
         self._msg_count += 1
-        if self._msg_count % 100 == 0:
-            logging.info(f"Received from {topic_name}: {msg.data}")
 
         if topic_name is UNITREE_IK_SOL_TOPIC:
             state = UnitTreeIkSol()
             try:
                 binary_data = bytes(msg.data)
                 state.ParseFromString(binary_data)
-                with self._state_lock:
-                    self._ik_sol.CopyFrom(state)
-                logging.info(f"Get {UNITREE_IK_SOL_TOPIC} msg")
+                self._arm_ctrl.ctrl_dual_arm(state.dual_arm_sol_q, state.dual_arm_sol_tauff)
+                if self._msg_count % 100 > 95:
+                    logging.info(f"Get {UNITREE_IK_SOL_TOPIC} msg")
+                # ts = state.timestamp
+                # ik_ms = ts.seconds * 1000000000 + ts.nanos
+                # now_ms = time.time_ns()
+                # delay_ms = now_ms - ik_ms
+                # logging.info(f"Get {UNITREE_IK_SOL_TOPIC} msg, {ik_ms} ms, {delay_ms / 1000000} ms")
+                # self._ik_sol.CopyFrom(state)
+                # self.__unitreeMsgPub()
+            except Exception as e:
+                logging.error(f'ParseFromString Protobuf failed: {e}')
+
+        if topic_name is TRACK_STATE_TOPIC:
+            state = TeleState()
+            try:
+                binary_data = bytes(msg.data)
+                state.ParseFromString(binary_data)
+                left_ctrl_triggerValue  = 10.0 - state.left_ctrl_trigger_value * 10,
+                right_ctrl_triggerValue = 10.0 - state.right_ctrl_trigger_value * 10,
+                with self._left_gripper_value.get_lock():
+                    self._left_gripper_value.value = left_ctrl_triggerValue[0]
+                with self._right_gripper_value.get_lock():
+                    self._right_gripper_value.value = right_ctrl_triggerValue[0]
+                if self._msg_count % 100 > 95:
+                    logging.info(f"Get {TRACK_STATE_TOPIC} msg")
+                # from google.protobuf import json_format
+                # json_string = json_format.MessageToJson(state,
+                #     always_print_fields_with_no_presence=True, # 强制包含默认值字段
+                #     preserving_proto_field_name=True    # 建议同时开启，保持字段名和 .proto 一致
+                # )
+                # print(json_string)
+                # ts = state.timestamp
+                # ik_ms = ts.seconds * 1000000000 + ts.nanos
+                # now_ms = time.time_ns()
+                # delay_ms = now_ms - ik_ms
+                # logging.info(f"Get {TRACK_STATE_TOPIC} msg, {ik_ms} ms, {delay_ms / 1000000} ms")
+                # self._ik_sol.CopyFrom(state)
+                # self.__unitreeMsgPub()
             except Exception as e:
                 logging.error(f'ParseFromString Protobuf failed: {e}')
 
     def __rosSpin(self):
         rclpy.spin(self.ros_node)
 
-    def __unitreeMsgPub(self):
-        # get unitree msg and ros send
-        if len(self._ik_sol.dual_arm_sol_q) >= 1:
-            self.arm_ctrl.ctrl_dual_arm(self._ik_sol.dual_arm_sol_q, self._ik_sol.dual_arm_sol_tauff)
-            logging.info(f"Unitree Msg pub")
+    # def __unitreeMsgPub(self):
+    #     # get unitree msg and ros send
+    #     if len(self._ik_sol.dual_arm_sol_q) >= 1:
+    #         self._arm_ctrl.ctrl_dual_arm(self._ik_sol.dual_arm_sol_q, self._ik_sol.dual_arm_sol_tauff)
+    #         ts = self._ik_sol.timestamp
+    #         ik_ms = ts.seconds * 1000000000 + ts.nanos
+    #         now_ms = time.time_ns()
+    #         delay_ms = now_ms - ik_ms
+    #         logging.info(f"Send Unitree msg, {ik_ms} ns, {delay_ms / 1000000} ms")
+    #         # logging.info(f"Unitree Msg pub")
 
     def __rosMsgPub(self):
         msg = UInt8MultiArray()
-        current_lr_arm_q  = self.arm_ctrl.get_current_dual_arm_q()
-        current_lr_arm_dq = self.arm_ctrl.get_current_dual_arm_dq()
+        current_lr_arm_q  = self._arm_ctrl.get_current_dual_arm_q()
+        current_lr_arm_dq = self._arm_ctrl.get_current_dual_arm_dq()
 
         try:
+            timestamp = time.time_ns()
+            self._low_state.timestamp.seconds = timestamp // 1_000_000_000
+            self._low_state.timestamp.nanos = timestamp % 1_000_000_000
             self._low_state.dual_arm_q.extend(current_lr_arm_q)
             self._low_state.dual_arm_dq.extend(current_lr_arm_dq)
             binary_data = self._low_state.SerializeToString()
@@ -178,7 +232,7 @@ class UnitreeG129Controller(ControllerInterface):
         except Exception as e:
             logging.error(f'SerializeToString Protobuf failed: {e}')
         self._low_state.Clear()
-        logging.info(f"{UNITREE_IK_SOL_TOPIC} Msg pub")
+        # logging.info(f"{UNITREE_LOW_STATE_TOPIC} Msg pub")
 
 
 def ExtraContrilerArgs(parser):
