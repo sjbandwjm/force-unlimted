@@ -7,6 +7,7 @@ Fourier GR1T1 Pick-Place 场景加载脚本
 """
 
 import argparse
+import torch
 from isaaclab.app import AppLauncher
 
 # 命令行参数
@@ -21,6 +22,7 @@ simulation_app = app_launcher.app
 
 import gymnasium as gym
 from tasks.fourier_gr1t1_tasks.pick_place_cylinder_gr1t1.pickplace_cylinder_fourier_gr1t1_env_cfg import PickPlaceFourierGR1T1BaseFixEnvCfg
+from subscribe.fourier_gr1_t1_controller import FourierGR1T1Controller
 
 def main():
     print("=" * 60)
@@ -37,10 +39,41 @@ def main():
         traceback.print_exc()
         return
     
+    controller = FourierGR1T1Controller("")
+    controller.Start()
     # 创建环境
     try:
         env = gym.make("Isaac-PickPlace-Cylinder-Fourier-GR1T1-Joint", cfg=env_cfg)
         print(f"[INFO] 环境创建成功")
+        # all_joint_names = env.scene["robot"].data.joint_names
+        # last_action = torch.zeros(len(all_joint_names), device=env.device)
+        # print(all_joint_names)
+        while(True):
+            import time
+            time.sleep(0.5)
+            # ik = controller.GetIKMsg()
+            # left_qpos  = ik[:7]
+            # right_qpos = ik[7:]
+
+            # left_joint_names  = ["left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+            #                     "left_elbow_pitch_joint", "left_wrist_yaw_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint"]
+            # right_joint_names = ["right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
+            #                     "right_elbow_pitch_joint", "right_wrist_yaw_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint"]
+
+            # for i, name in enumerate(left_joint_names):
+            #     idx = all_joint_names.index(name)
+            #     last_action[idx] = left_qpos[i]
+
+            # for i, name in enumerate(right_joint_names):
+            #     idx = all_joint_names.index(name)
+            #     last_action[idx] = right_qpos[i]
+
+            # env_state = env.unwrapped.scene.get_state()
+            # env_state_json = sim_state_to_json(env_state)
+
+            # env.step(last_action)
+            print(f"[INFO] 环境创建成功")
+
     except Exception as e:
         print(f"[ERROR] 环境创建失败: {e}")
         import traceback
@@ -54,6 +87,7 @@ def main():
     
     env.close()
     print("[INFO] 环境已关闭")
+    controller.stop()
 
 
 if __name__ == "__main__":
