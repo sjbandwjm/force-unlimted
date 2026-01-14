@@ -1,0 +1,13 @@
+instance:
+  _target_: teleoperation.policy.lerobot.LerobotPolicy
+  repo_id: "FourierIntelligence/pick-lemon-200-256x256"
+  policy_type: "scale_dp"
+  pretrained_path: ???
+
+  # policy_config:
+  #   horizon: 24
+  #   n_action_steps: 16
+  #   model_size: "ScaleDP_S"
+  #   noise_scheduler_type: "DDIM"
+  #   num_inference_steps: 50
+  #   use_delta_action: false

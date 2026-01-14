@@ -1,0 +1,21 @@
+instance:
+  _target_: teleoperation.camera.camera_multi_oak.CameraMultiOak
+  camera_configs:
+    top:
+      serial: "xxx"
+      fps: 30
+      width: 1280
+      height: 800
+      resolution: "800p"
+      use_depth: ${use_depth}
+      rotation: 0
+
+  display_config:
+    key: "top"
+    mode: "stereo"
+    resolution: "400p"
+    crop_sizes: [0, 0, 0, 0]
+
+  save_processes: 6
+  save_threads: 12
+  save_queue_size: 120

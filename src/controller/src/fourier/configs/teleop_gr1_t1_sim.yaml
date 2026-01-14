@@ -1,0 +1,62 @@
+defaults:
+  - _self_
+  - hand: fourier_dexpilot_dhx
+  - robot: gr1t1_legacy
+  - camera: oak_97
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+# Debug
+debug: false
+debug_hand: false
+sim: true               # 使用模拟模式
+wait_time: 5.0
+frequency: 100          # 控制循环频率
+use_waist: false
+use_head: false
+use_depth: false
+
+# Mocap system (avp or quest)
+mocap: quest
+
+# CPU affinity / niceness
+cpu:
+  affinity: []
+  niceness: -5
+
+# Recording options
+recording:
+  enabled: false
+  task_name: "teleop"
+
+# Joint filter (mechanical arm)
+joint_filter:
+  min_cutoff: 0.01
+  beta: 10.0
+
+# Hand filter (夹爪)
+hand_filter:
+  min_cutoff: 0.001
+  beta: 50.0
+
+# Head filter (可选, sim 可忽略)
+head_filter:
+  alpha: 0.7
+
+# Upsampler (用于机械臂平滑输出)
+upsampler:
+  frequency: 120
+  gravity_compensation: false
+
+# Preprocessor (用于 IK 处理)
+preprocessor:
+  hand_type: ${hand.type}
+  named_links: ${robot.named_links}
+
+# Hydra 运行输出
+hydra:
+  job:
+    chdir: true
+  run:
+    dir: outputs/${recording.task_name}/${now:%Y-%m-%d_%H-%M-%S}
+  verbose: [teleoperation, __main__]
