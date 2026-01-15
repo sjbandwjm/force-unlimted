@@ -43,6 +43,9 @@ from std_msgs.msg import String, UInt8MultiArray
 from base.controller_interface import ControllerInterface
 from base.utils import BuildArgParser, RegisterShutDownHook, SaveImage, Str2Bool
 
+# =========================
+# fourier teleoperation package
+# =========================
 from teleoperation.adapter.hands import DummyDexHand, HandAdapter
 from teleoperation.adapter.robots import DummyRobot, RobotAdapter
 from teleoperation.retarget.robot import DexRobot
@@ -239,11 +242,10 @@ class FourierGR1T1Controller(ControllerInterface):
             try:
                 binary_data = bytes(msg.data)
                 state.ParseFromString(binary_data)
-                dual_arm_q = np.array(state.dual_arm_sol_q)  # 14
-                self._fourier_dex_reboot.q_real = self.buildQCmd(
-                    dual_arm_q,
-                    self._fourier_dex_reboot.q_real    # 当前机器人真实关节
-                )
+                dual_q = np.array(state.dual_arm_sol_q, dtype=np.float64, copy=True)
+                q_cur  = np.array(self._fourier_dex_reboot.q_real, dtype=np.float64, copy=True)
+                q_cmd = self.buildQCmd(dual_q, q_cur)
+                self._fourier_dex_reboot.q_real = q_cmd
                 self.control_joints()
                 if self._msg_count % 100 > 95:
                     logging.info(f"Get {FOURIER_IK_SOL_TOPIC} msg")
