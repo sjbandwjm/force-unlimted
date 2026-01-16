@@ -76,7 +76,7 @@ class FourierGR1T1Controller(ControllerInterface):
         self._cfg = self.__load_config(config.get("config_path", str), config.get("config_name", str))
         self._sim = self._cfg.sim
         self._dt = 1 / self._cfg.frequency
-        
+
         self._msg_count       = 0
         self._publisher_control = {}
         self._ik_sol      = UnitTreeIkSol()
@@ -172,7 +172,7 @@ class FourierGR1T1Controller(ControllerInterface):
 
     def IsRunnning(self):
         return self._running
-    
+
     def __load_config(self, config_path: str, config_name: str) -> DictConfig:
         """
         使用 Hydra 解析配置文件
@@ -248,19 +248,19 @@ class FourierGR1T1Controller(ControllerInterface):
                 dual_q = np.array(state.dual_arm_sol_q, dtype=np.float64, copy=True)
                 q_cur  = np.array(self._fourier_dex_reboot.q_real, dtype=np.float64, copy=True)
                 q_cmd = self.buildQCmd(dual_q, q_cur)
-                
+
                 # debug visiable
-                native = debug_visiable_state.native_pos.add()
+                native = debug_visiable_state.native_pos
                 native.q_real.extend(self._fourier_dex_reboot.q_real.flatten().tolist())
-                
+
                 self._fourier_dex_reboot.q_real = q_cmd
 
                 # debug visiable
-                solve = debug_visiable_state.solve_pos.add()
+                solve = debug_visiable_state.solve_pos
                 solve.q_real.extend(self._fourier_dex_reboot.q_real.flatten().tolist())
                 qpos = self.control_joints()
 
-                filter = debug_visiable_state.filter_pos.add()
+                filter = debug_visiable_state.filter_pos
                 filter.filter_qpos.extend(qpos.flatten().tolist())
                 filter.q_real.extend(self._fourier_dex_reboot.q_real.flatten().tolist())
 
@@ -454,21 +454,21 @@ if __name__ == "__main__":
 
 
 # if you are using Apple Vision Pro:
-# python -m teleoperation 
-#        --config-name teleop 
-#        robot=gr1t1_legacy 
-#        hand=fourier_dexpilot_dhx 
-#        camera=oak_97 
-#        robot.visualize=true 
-####     mocap=avp 
+# python -m teleoperation
+#        --config-name teleop
+#        robot=gr1t1_legacy
+#        hand=fourier_dexpilot_dhx
+#        camera=oak_97
+#        robot.visualize=true
+####     mocap=avp
 #        sim=true
 
 # OR if you are using Meta Quest 3
-# python -m teleoperation 
-#        --config-name teleop 
-#        robot=gr1t1_legacy 
-#        hand=fourier_dexpilot_dhx 
-#        camera=oak_97 
-#        robot.visualize=true 
-####     mocap=quest 
+# python -m teleoperation
+#        --config-name teleop
+#        robot=gr1t1_legacy
+#        hand=fourier_dexpilot_dhx
+#        camera=oak_97
+#        robot.visualize=true
+####     mocap=quest
 #        sim=true

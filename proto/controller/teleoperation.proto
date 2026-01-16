@@ -30,7 +30,7 @@ message Filter {
 // 整体四元数遥操作数据
 message FourierTeleoperation {
     google.protobuf.Timestamp timestamp = 1;
-    repeated Native native_pos = 2;
-    repeated Solve solve_pos = 3;
-    repeated Filter filter_pos = 4;
+    Native native_pos = 2;
+    Solve solve_pos = 3;
+    Filter filter_pos = 4;
 }
