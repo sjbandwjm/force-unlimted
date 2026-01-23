@@ -23,7 +23,7 @@ from foxglove.Pose_pb2 import Pose
 from foxglove.Quaternion_pb2 import Quaternion
 from foxglove.Vector3_pb2 import Vector3
 
-from teleop.src.utils import matrix_to_pose
+from teleop.src.utils import *
 from teleop.src.televuer.televuer import TeleVuer
 from teleop.tele_pose_pb2 import TeleState
 from teleop.src.common import TRACK_STATE_TOPIC
@@ -43,7 +43,7 @@ class TeleopPublisher(Node):
                     img_shape=camera_config['head_camera']['image_shape'],
                     display_fps=camera_config['head_camera']['fps'],
                     display_mode=args.display_mode,   # "ego" or "immersive" or "pass-through"
-                    zmq=camera_config['head_camera']['enable_zmq'],
+                    dds=camera_config['head_camera']['enable_zmq'],
                     webrtc=camera_config['head_camera']['enable_webrtc'],
                     webrtc_url=f"https://{args.image_server_host}:{camera_config['head_camera']['webrtc_port']}/offer"
         )
@@ -58,7 +58,9 @@ class TeleopPublisher(Node):
         self.image_timer = self.create_timer(image_time_priod, self._timer_image_callback)
         self.start_track = False
         self.base_link = Pose(position=Vector3(x=0, y=0, z=0), orientation=Quaternion(x=0, y=0, z=0, w=1))
-        self.prev_left_a_button = False
+        self.prev_left_track_button = False
+        self.perv_right_hand_pinch = False
+        self.prev_right_hand_pinch_y = 0
 
     def __del__(self):
         self.tv.close()
@@ -70,18 +72,22 @@ class TeleopPublisher(Node):
             # cv2.imshow("Head Camera", img)
         # if cv2.waitKey(1) & 0xFF == ord('q'):
             # break
-
-    def _timer_pub_callback(self):
-        cur_left_a = self.tv.left_ctrl_aButton
-        if cur_left_a != self.prev_left_a_button:
+    def _set_start_track(self, trigger_button: bool):
+        cur_left_a: bool = trigger_button
+        if cur_left_a != self.prev_left_track_button:
             if cur_left_a == True and not self.start_track:
                 self.start_track = True
                 logging.info("start teleop track")
             elif cur_left_a == True and self.start_track:
                 self.start_track = False
                 logging.info("stop teleop track")
-            self.prev_left_a_button = cur_left_a
+            self.prev_left_track_button = cur_left_a
 
+    def _timer_pub_callback(self):
+        if not self.args.use_hand_track:
+            self._set_start_track(self.tv.left_ctrl_aButton)
+        else:
+            self._set_start_track(self.tv.left_hand_pinch)
 
         state = TeleState()
         if not self.start_track:
@@ -93,9 +99,23 @@ class TeleopPublisher(Node):
         else:
             state.start_track = True
 
-        state.base_link.CopyFrom(self.base_link)
+        state.base_link.extend(Pose2Matrix(self.base_link).flatten())
         state.timestamp.seconds = time.time_ns() // 1_000_000_000
         state.timestamp.nanos = time.time_ns() % 1_000_000_000
+
+        # right ee
+        valid = valid_matrix(self.tv.right_arm_pose)
+        if valid:
+            state.right_ee_pose.extend(self.tv.right_arm_pose.flatten())
+        # left ee
+        valid = valid_matrix(self.tv.left_arm_pose)
+        if valid:
+            state.left_ee_pose.extend(self.tv.left_arm_pose.flatten())
+        # head pose
+        valid = valid_matrix(self.tv.head_pose)
+        if valid:
+            state.head_pose.extend(self.tv.head_pose.flatten())
+
         # right arm
         state.right_ctrl_trigger = self.tv.right_ctrl_trigger
         state.right_ctrl_trigger_value = self.tv.right_ctrl_triggerValue
@@ -105,9 +125,6 @@ class TeleopPublisher(Node):
         state.right_ctrl_thumbstick_value.extend(self.tv.right_ctrl_thumbstickValue)
         state.right_ctrl_a_button = self.tv.right_ctrl_aButton
         state.right_ctrl_b_button = self.tv.right_ctrl_bButton
-        pose = matrix_to_pose(self.tv.right_arm_pose)
-        if pose is not None:
-            state.right_ee_pose.CopyFrom(pose)
 
         # left arm
         state.left_ctrl_trigger = self.tv.left_ctrl_trigger
@@ -118,16 +135,23 @@ class TeleopPublisher(Node):
         state.left_ctrl_thumbstick_value.extend(self.tv.left_ctrl_thumbstickValue)
         state.left_ctrl_a_button = self.tv.left_ctrl_aButton
         state.left_ctrl_b_button = self.tv.left_ctrl_bButton
-        pose = matrix_to_pose(self.tv.left_arm_pose)
-        if pose is not None:
-            state.left_ee_pose.CopyFrom(pose)
 
-        # head pose
-        pose = matrix_to_pose(self.tv.head_pose)
-        if pose is not None:
-            state.head_pose.CopyFrom(pose)
-
-        #TODO hand pose
+        if self.args.use_hand_track:
+            # hand pose
+            ## left hand
+            state.left_hand_position.extend(self.tv.left_hand_positions.flatten())
+            state.left_hand_orientation.extend(self.tv.left_hand_orientations.flatten())
+            state.left_hand_pinch = self.tv.left_hand_pinch
+            state.left_hand_pinch_value = self.tv.left_hand_pinchValue
+            state.left_hand_squeeze = self.tv.left_hand_squeeze
+            state.left_hand_squeeze_value = self.tv.left_hand_squeezeValue
+            ## right hand
+            state.right_hand_position.extend(self.tv.right_hand_positions.flatten())
+            state.right_hand_orientation.extend(self.tv.right_hand_orientations.flatten())
+            state.right_hand_pinch = self.tv.right_hand_pinch
+            state.right_hand_pinch_value = self.tv.right_hand_pinchValue
+            state.right_hand_squeeze = self.tv.right_hand_squeeze
+            state.right_hand_squeeze_value = self.tv.right_hand_squeezeValue
 
         # 2. 序列化为二进制字符串
         binary_data = state.SerializeToString()
@@ -150,9 +174,23 @@ class TeleopPublisher(Node):
         # |
         # Y
         # 控制robot base_link系 左右前后
-        right_xy = self.tv.right_ctrl_thumbstickValue
-        # 控制robot base_link系 上下
-        left_xy = self.tv.left_ctrl_thumbstickValue
+        if not self.args.use_hand_track:
+            right_xy = self.tv.right_ctrl_thumbstickValue
+            # 控制robot base_link系 上下
+            left_xy = self.tv.left_ctrl_thumbstickValue
+        else:
+            right_hand_pinch = self.tv.right_hand_pinch
+            if right_hand_pinch != self.perv_right_hand_pinch:
+                if right_hand_pinch == True:
+                    self.prev_right_hand_pinch_y = self.tv.right_arm_pose[1, 3]
+
+                self.perv_right_hand_pinch = right_hand_pinch
+
+            right_xy = [0, 0]
+            if right_hand_pinch:
+                right_xy[1] = -(self.tv.right_arm_pose[1, 3] - self.prev_right_hand_pinch_y)
+
+
         head_mat = self.tv.head_pose
         head_mat = T_ROBOT_OPENXR @ head_mat
         # if left_xy[0] != 0:

@@ -11,14 +11,14 @@ from thirdparty_sdk.fourier.robot_arm_ik_r1lite import Fourier_ArmIK
 
 from ik_processor_base import IKProcessor
 from common import FOURIER_IK_SOL_TOPIC, FOURIER_LOW_STATE_TOPIC
-from common import WebXR2RobotForEEPose, Pose2matrix
+from common import *
 
 # proto
 from teleop.tele_pose_pb2 import TeleState
 from controller.state_pb2 import UnitTreeLowState
 from ik.ik_sol_pb2 import UnitTreeIkSol
 
-def PoseProcessEE(ee_mat: np.ndarray, base_mat: np.ndarray, head_mat: np.ndarray):
+def PoseProcessEE(ee_mat: np.ndarray, base_mat: np.ndarray):
     ee_mat[0:3, 3] = ee_mat[0:3, 3] - base_mat[0:3, 3]
 
     # 1. 假设你已经得到了当前的位姿 (4x4 matrix)
@@ -40,6 +40,34 @@ def PoseProcessEE(ee_mat: np.ndarray, base_mat: np.ndarray, head_mat: np.ndarray
     trans[0:3, 3] = [0, 0, 0.15]
     ee_mat = ee_mat @ trans
     return ee_mat
+
+def PoseProcessEEForLeftHand(ee_mat: np.ndarray, base_mat: np.ndarray):
+    ee_mat[0:3, 3] = ee_mat[0:3, 3] - base_mat[0:3, 3]
+    ee_mat = ee_mat @ T_ROBOT_OPENXR
+
+    trans = np.eye(4)
+    trans[0:3, 3] = [0, 0, 0.1]
+    ee_mat = ee_mat @ trans
+    return ee_mat
+
+def PoseProcessEEForRightHand(ee_mat: np.ndarray, base_mat: np.ndarray):
+    ee_mat[0:3, 3] = ee_mat[0:3, 3] - base_mat[0:3, 3]
+
+    R_z_90 = pin.utils.rotate('z', np.pi / 2)
+    T_rot = pin.SE3(R_z_90, np.zeros(3))
+    ee_mat = pin.SE3(ee_mat).act(T_rot).homogeneous
+
+    R_x_90 = pin.utils.rotate('x', -np.pi / 2)
+    T_rot = pin.SE3(R_x_90, np.zeros(3))
+    ee_mat = pin.SE3(ee_mat).act(T_rot).homogeneous
+
+    # ee_mat =  ee_mat @ T_ROBOT_OPENXR
+
+    trans = np.eye(4)
+    trans[0:3, 3] = [0, 0, 0.1]
+    ee_mat = ee_mat @ trans
+    return ee_mat
+
 
 class Gr1T1Processor(IKProcessor):
     def __init__(self, node: Node):
@@ -78,24 +106,26 @@ class Gr1T1Processor(IKProcessor):
         cur_dual_arm_q = np.array(low_state_copy.dual_arm_q) if len(low_state_copy.dual_arm_q) == self.dq_num else None
         cur_dual_arm_dq = np.array(low_state_copy.dual_arm_dq) if len(low_state_copy.dual_arm_dq) == self.dq_num else None
 
-        if not tele_state.HasField("left_ee_pose") or \
-            not tele_state.HasField("right_ee_pose") or \
-            not tele_state.HasField("head_pose"):
+        if len(tele_state.left_ee_pose) == 0 or \
+            len(tele_state.right_ee_pose) == 0 or \
+            len(tele_state.head_pose) == 0:
             logging.warning("TeleState is missing required fields for IK processing.")
             return
 
         # 将xr 坐标系转换为 robot坐标系
-        left_ee_mat = Pose2matrix(tele_state.left_ee_pose)
-        right_ee_mat = Pose2matrix(tele_state.right_ee_pose)
-        head_ee_mat = Pose2matrix(tele_state.head_pose)
-        base_link_robot = Pose2matrix(tele_state.base_link)
+        left_ee_mat = np.array(tele_state.left_ee_pose, dtype=np.float64).reshape(4, 4)
+        right_ee_mat = np.array(tele_state.right_ee_pose, dtype=np.float64).reshape(4, 4)
+        head_ee_mat = np.array(tele_state.head_pose, dtype=np.float64).reshape(4, 4)
+        base_link_robot = np.array(tele_state.base_link, dtype=np.float64).reshape(4, 4)
 
         left_ee_mat_robot = WebXR2RobotForEEPose(left_ee_mat)
         right_ee_mat_robot = WebXR2RobotForEEPose(right_ee_mat)
         head_ee_mat_robot = WebXR2RobotForEEPose(head_ee_mat)
 
-        left_ee_mat_robot = PoseProcessEE(left_ee_mat_robot, base_link_robot, head_ee_mat_robot)
-        right_ee_mat_robot = PoseProcessEE(right_ee_mat_robot, base_link_robot, head_ee_mat_robot)
+        # left_ee_mat_robot = PoseProcessEE(left_ee_mat_robot, base_link_robot)
+        # right_ee_mat_robot = PoseProcessEE(right_ee_mat_robot, base_link_robot)
+        left_ee_mat_robot = PoseProcessEEForLeftHand(left_ee_mat_robot, base_link_robot)
+        right_ee_mat_robot = PoseProcessEEForRightHand(right_ee_mat_robot, base_link_robot)
         # ik 求解
         sol_q, sol_tuaff = self._arm_ik.solve_ik(left_ee_mat_robot, right_ee_mat_robot, cur_dual_arm_q, cur_dual_arm_dq)
 

@@ -35,20 +35,23 @@ def TeleopTrackState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
     # left_ee
     tf.parent_frame_id = "webxr"
     tf.child_frame_id = "left_ee"
-    tf.translation.CopyFrom(msg.left_ee_pose.position)
-    tf.rotation.CopyFrom(msg.left_ee_pose.orientation)
+    left_ee_pose = Matrix2Pose(np.array(msg.left_ee_pose))
+    tf.translation.CopyFrom(left_ee_pose.position)
+    tf.rotation.CopyFrom(left_ee_pose.orientation)
     out.data.transforms.append(tf)
     # right_ee
     tf.parent_frame_id = "webxr"
     tf.child_frame_id = "right_ee"
-    tf.translation.CopyFrom(msg.right_ee_pose.position)
-    tf.rotation.CopyFrom(msg.right_ee_pose.orientation)
+    right_ee_pose = Matrix2Pose(np.array(msg.right_ee_pose))
+    tf.translation.CopyFrom(right_ee_pose.position)
+    tf.rotation.CopyFrom(right_ee_pose.orientation)
     out.data.transforms.append(tf)
     # head pose
     tf.parent_frame_id = "webxr"
     tf.child_frame_id = "head_ee"
-    tf.translation.CopyFrom(msg.head_pose.position)
-    tf.rotation.CopyFrom(msg.head_pose.orientation)
+    head_pose = Matrix2Pose(np.array(msg.head_pose))
+    tf.translation.CopyFrom(head_pose.position)
+    tf.rotation.CopyFrom(head_pose.orientation)
     out.data.transforms.append(tf)
 
     out.data.transforms.append(
@@ -59,13 +62,14 @@ def TeleopTrackState(inmsg: InMessage, callback: Callable[[OutMessage], None]):
         )
     )
 
+    base_link = Matrix2Pose(np.array(msg.base_link))
     out.data.transforms.append(
         FrameTransform(
             timestamp=TimeNs2GoogleTs(inmsg.timestamp_ns),
             parent_frame_id="robot",
             child_frame_id="base_link",
-            translation = msg.base_link.position,
-            rotation= msg.base_link.orientation
+            translation = base_link.position,
+            rotation= base_link.orientation
         )
     )
 

@@ -14,7 +14,7 @@ import logging
 
 class TeleVuer:
     def __init__(self, use_hand_tracking: bool, binocular: bool=True, img_shape: tuple=None, display_fps: float=30.0,
-                       display_mode: Literal["immersive", "pass-through", "ego"]="immersive", zmq: bool=False, webrtc: bool=False, webrtc_url: str=None,
+                       display_mode: Literal["immersive", "pass-through", "ego"]="immersive", dds: bool=False, webrtc: bool=False, webrtc_url: str=None,
                        cert_file: str=None, key_file: str=None):
         """
         TeleVuer class for OpenXR-based XR teleoperate applications.
@@ -26,7 +26,7 @@ class TeleVuer:
         :param display_fps: float, target frames per second for display updates (default: 30.0).
 
         :param display_mode: str, controls the VR viewing mode. Options are "immersive", "pass-through", and "ego".
-        :param zmq: bool, whether to use zmq for image transmission.
+        :param dds: bool, whether to use dds for image transmission.
         :param webrtc: bool, whether to use webrtc for real-time communication.
         :param webrtc_url: str, URL for the webrtc offer. must be provided if webrtc is True.
         :param cert_file: str, path to the SSL certificate file.
@@ -35,22 +35,22 @@ class TeleVuer:
         Note:
 
         - display_mode controls what the VR headset displays:
-            * "immersive": fully immersive mode; VR shows the robot's first-person view (zmq or webrtc must be enabled).
-            * "pass-through": VR shows the real world through the VR headset cameras; no image from zmq or webrtc is displayed (even if enabled).
+            * "immersive": fully immersive mode; VR shows the robot's first-person view (dds or webrtc must be enabled).
+            * "pass-through": VR shows the real world through the VR headset cameras; no image from dds or webrtc is displayed (even if enabled).
             * "ego": a small window in the center shows the robot's first-person view, while the surrounding area shows the real world.
 
         - Only one image mode is active at a time.
-        - Image transmission to VR occurs only if display_mode is "immersive" or "ego" and the corresponding zmq or webrtc option is enabled.
-        - If zmq and webrtc simultaneously enabled, webrtc will be prioritized.
+        - Image transmission to VR occurs only if display_mode is "immersive" or "ego" and the corresponding dds or webrtc option is enabled.
+        - If dds and webrtc simultaneously enabled, webrtc will be prioritized.
 
         --------------              -------------------           --------------       -----------------                     -------
          display_mode       |        display behavior         |    image to VR     |      image source        |               Notes
         --------------              -------------------           --------------       -----------------                     -------
-           immersive        |   fully immersive view (robot)  |     Yes (full)     |     zmq or webrtc        |   if both enabled, webrtc prioritized
+           immersive        |   fully immersive view (robot)  |     Yes (full)     |     dds or webrtc        |   if both enabled, webrtc prioritized
         --------------              -------------------           --------------       -----------------                     -------
          pass-through       |       Real world view (VR)      |         No         |          N/A             |  even if image source enabled, don't display
         --------------              -------------------           --------------       -----------------                     -------
-              ego           |      ego view (robot + VR)      |    Yes (small)     |     zmq or webrtc        |   if both enabled, webrtc prioritized
+              ego           |      ego view (robot + VR)      |    Yes (small)     |     dds or webrtc        |   if both enabled, webrtc prioritized
         --------------              -------------------           --------------       -----------------                     -------
 
         """
@@ -92,21 +92,20 @@ class TeleVuer:
 
         self.vuer = Vuer(host='0.0.0.0', cert=cert_file, key=key_file, queries=dict(grid=False), queue_len=3)
         self.vuer.add_handler("CAMERA_MOVE")(self.on_cam_move)
-        self.vuer.add_handler("HEAD_MOVE")(self.on_cam_move)
         if self.use_hand_tracking:
             self.vuer.add_handler("HAND_MOVE")(self.on_hand_move)
         else:
             self.vuer.add_handler("CONTROLLER_MOVE")(self.on_controller_move)
 
         self.display_mode = display_mode
-        self.zmq = zmq
+        self.dds = dds
         self.webrtc = webrtc
         self.webrtc_url = webrtc_url
 
         if self.display_mode == "immersive":
             if self.webrtc:
                 fn = self.main_image_binocular_webrtc if self.binocular else self.main_image_monocular_webrtc
-            elif self.zmq:
+            elif self.dds:
                 self.img2display_shm = shared_memory.SharedMemory(create=True, size=np.prod(self.img_shape) * np.uint8().itemsize)
                 self.img2display = np.ndarray(self.img_shape, dtype=np.uint8, buffer=self.img2display_shm.buf)
                 self.latest_frame = None
@@ -114,13 +113,13 @@ class TeleVuer:
                 self.stop_writer_event = threading.Event()
                 self.writer_thread = threading.Thread(target=self._xr_render_loop, daemon=True)
                 self.writer_thread.start()
-                fn = self.main_image_binocular_zmq if self.binocular else self.main_image_monocular_zmq
+                fn = self.main_image_binocular_dds if self.binocular else self.main_image_monocular_dds
             else:
-                raise ValueError("[TeleVuer] immersive mode requires zmq=True or webrtc=True.")
+                raise ValueError("[TeleVuer] immersive mode requires dds=True or webrtc=True.")
         elif self.display_mode == "ego":
             if self.webrtc:
                 fn = self.main_image_binocular_webrtc_ego if self.binocular else self.main_image_monocular_webrtc_ego
-            elif self.zmq:
+            elif self.dds:
                 self.img2display_shm = shared_memory.SharedMemory(create=True, size=np.prod(self.img_shape) * np.uint8().itemsize)
                 self.img2display = np.ndarray(self.img_shape, dtype=np.uint8, buffer=self.img2display_shm.buf)
                 self.latest_frame = None
@@ -128,9 +127,9 @@ class TeleVuer:
                 self.stop_writer_event = threading.Event()
                 self.writer_thread = threading.Thread(target=self._xr_render_loop, daemon=True)
                 self.writer_thread.start()
-                fn = self.main_image_binocular_zmq_ego if self.binocular else self.main_image_monocular_zmq_ego
+                fn = self.main_image_binocular_dds_ego if self.binocular else self.main_image_monocular_dds_ego
             else:
-                raise ValueError("[TeleVuer] ego mode requires zmq=True or webrtc=True.")
+                raise ValueError("[TeleVuer] ego mode requires dds=True or webrtc=True.")
         elif self.display_mode == "pass-through":
             fn = self.main_pass_through
         else:
@@ -141,11 +140,30 @@ class TeleVuer:
         self.head_pose_shared = Array('d', 16, lock=True)
         self.left_arm_pose_shared = Array('d', 16, lock=True)
         self.right_arm_pose_shared = Array('d', 16, lock=True)
+
+        self.left_ctrl_trigger_shared = Value('b', False, lock=True)
+        self.left_ctrl_triggerValue_shared = Value('d', 0.0, lock=True)
+        self.left_ctrl_squeeze_shared = Value('b', False, lock=True)
+        self.left_ctrl_squeezeValue_shared = Value('d', 0.0, lock=True)
+        self.left_ctrl_thumbstick_shared = Value('b', False, lock=True)
+        self.left_ctrl_thumbstickValue_shared = Array('d', 2, lock=True)
+        self.left_ctrl_aButton_shared = Value('b', False, lock=True)
+        self.left_ctrl_bButton_shared = Value('b', False, lock=True)
+
+        self.right_ctrl_trigger_shared = Value('b', False, lock=True)
+        self.right_ctrl_triggerValue_shared = Value('d', 0.0, lock=True)
+        self.right_ctrl_squeeze_shared = Value('b', False, lock=True)
+        self.right_ctrl_squeezeValue_shared = Value('d', 0.0, lock=True)
+        self.right_ctrl_thumbstick_shared = Value('b', False, lock=True)
+        self.right_ctrl_thumbstickValue_shared = Array('d', 2, lock=True)
+        self.right_ctrl_aButton_shared = Value('b', False, lock=True)
+        self.right_ctrl_bButton_shared = Value('b', False, lock=True)
+
         if self.use_hand_tracking:
-            self.left_hand_position_shared = Array('d', 75, lock=True)
-            self.right_hand_position_shared = Array('d', 75, lock=True)
-            self.left_hand_orientation_shared = Array('d', 25 * 9, lock=True)
-            self.right_hand_orientation_shared = Array('d', 25 * 9, lock=True)
+            self.left_hand_position_shared = Array('d', 24 * 3, lock=True)
+            self.right_hand_position_shared = Array('d', 24 * 3, lock=True)
+            self.left_hand_orientation_shared = Array('d', 24 * 9, lock=True)
+            self.right_hand_orientation_shared = Array('d', 24 * 9, lock=True)
 
             self.left_hand_pinch_shared = Value('b', False, lock=True)
             self.left_hand_pinchValue_shared = Value('d', 0.0, lock=True)
@@ -156,24 +174,6 @@ class TeleVuer:
             self.right_hand_pinchValue_shared = Value('d', 0.0, lock=True)
             self.right_hand_squeeze_shared = Value('b', False, lock=True)
             self.right_hand_squeezeValue_shared = Value('d', 0.0, lock=True)
-        else:
-            self.left_ctrl_trigger_shared = Value('b', False, lock=True)
-            self.left_ctrl_triggerValue_shared = Value('d', 0.0, lock=True)
-            self.left_ctrl_squeeze_shared = Value('b', False, lock=True)
-            self.left_ctrl_squeezeValue_shared = Value('d', 0.0, lock=True)
-            self.left_ctrl_thumbstick_shared = Value('b', False, lock=True)
-            self.left_ctrl_thumbstickValue_shared = Array('d', 2, lock=True)
-            self.left_ctrl_aButton_shared = Value('b', False, lock=True)
-            self.left_ctrl_bButton_shared = Value('b', False, lock=True)
-
-            self.right_ctrl_trigger_shared = Value('b', False, lock=True)
-            self.right_ctrl_triggerValue_shared = Value('d', 0.0, lock=True)
-            self.right_ctrl_squeeze_shared = Value('b', False, lock=True)
-            self.right_ctrl_squeezeValue_shared = Value('d', 0.0, lock=True)
-            self.right_ctrl_thumbstick_shared = Value('b', False, lock=True)
-            self.right_ctrl_thumbstickValue_shared = Array('d', 2, lock=True)
-            self.right_ctrl_aButton_shared = Value('b', False, lock=True)
-            self.right_ctrl_bButton_shared = Value('b', False, lock=True)
 
         self.process = Process(target=self._vuer_run)
         self.process.daemon = True
@@ -231,6 +231,39 @@ class TeleVuer:
         except:
             pass
 
+    async def on_controller_state(self, event, session, fps=60):
+        try:
+            # ControllerState
+            left_controller = event.value["leftState"]
+            right_controller = event.value["rightState"]
+
+            def extract_controllers(controllerState, prefix):
+                # trigger
+                with getattr(self, f"{prefix}_ctrl_trigger_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_trigger_shared").value = bool(controllerState.get("trigger", False))
+                with getattr(self, f"{prefix}_ctrl_triggerValue_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_triggerValue_shared").value = float(controllerState.get("triggerValue", 0.0))
+                # squeeze
+                with getattr(self, f"{prefix}_ctrl_squeeze_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_squeeze_shared").value = bool(controllerState.get("squeeze", False))
+                with getattr(self, f"{prefix}_ctrl_squeezeValue_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_squeezeValue_shared").value = float(controllerState.get("squeezeValue", 0.0))
+                # thumbstick
+                with getattr(self, f"{prefix}_ctrl_thumbstick_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_thumbstick_shared").value = bool(controllerState.get("thumbstick", False))
+                with getattr(self, f"{prefix}_ctrl_thumbstickValue_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_thumbstickValue_shared")[:] = controllerState.get("thumbstickValue", [0.0, 0.0])
+                # buttons
+                with getattr(self, f"{prefix}_ctrl_aButton_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_aButton_shared").value = bool(controllerState.get("aButton", False))
+                with getattr(self, f"{prefix}_ctrl_bButton_shared").get_lock():
+                    getattr(self, f"{prefix}_ctrl_bButton_shared").value = bool(controllerState.get("bButton", False))
+
+            extract_controllers(left_controller, "left")
+            extract_controllers(right_controller, "right")
+        except Exception as e:
+            pass
+
     async def on_controller_move(self, event, session, fps=60):
         # logging.info(f"[TeleVuer] on_controller_move event received: {event.value}")
         """https://docs.vuer.ai/en/latest/examples/20_motion_controllers.html"""
@@ -279,23 +312,42 @@ class TeleVuer:
             right_hand_data = event.value["right"]
             left_hand = event.value["leftState"]
             right_hand = event.value["rightState"]
+
+            def is_valid(data):
+                from msgpack import ExtType
+                # 1. 检查是否为 None
+                if data is None:
+                    return False
+                # 2. 检查是否为 ExtType(code=0, data=b'\x00')
+                if isinstance(data, ExtType):
+                    if data.code == 0 and data.data == b'\x00':
+                        return False
+                # 3. 检查长度（手部数据通常应为 400 个 float）
+                if not hasattr(data, "__len__") or len(data) < 400:
+                    return False
+                return True
+
             # HandState
             def extract_hand_poses(hand_data, arm_pose_shared, hand_position_shared, hand_orientation_shared):
+                if not is_valid(hand_data):
+                    return
+
                 with arm_pose_shared.get_lock():
                     arm_pose_shared[:] = hand_data[0:16]
 
+                joint_data = hand_data[16:]
                 with hand_position_shared.get_lock():
-                    for i in range(25):
+                    for i in range(24):
                         base = i * 16
-                        hand_position_shared[i * 3: i * 3 + 3] = [hand_data[base + 12], hand_data[base + 13], hand_data[base + 14]]
+                        hand_position_shared[i * 3: i * 3 + 3] = [joint_data[base + 12], joint_data[base + 13], joint_data[base + 14]]
 
                 with hand_orientation_shared.get_lock():
-                    for i in range(25):
+                    for i in range(24):
                         base = i * 16
                         hand_orientation_shared[i * 9: i * 9 + 9] = [
-                            hand_data[base + 0], hand_data[base + 1], hand_data[base + 2],
-                            hand_data[base + 4], hand_data[base + 5], hand_data[base + 6],
-                            hand_data[base + 8], hand_data[base + 9], hand_data[base + 10],
+                            joint_data[base + 0], joint_data[base + 1], joint_data[base + 2],
+                            joint_data[base + 4], joint_data[base + 5], joint_data[base + 6],
+                            joint_data[base + 8], joint_data[base + 9], joint_data[base + 10],
                         ]
 
             def extract_hands(handState, prefix):
@@ -315,12 +367,13 @@ class TeleVuer:
             extract_hands(left_hand, "left")
             extract_hands(right_hand, "right")
 
-        except:
+        except Exception as e:
+            logging.info(e)
             pass
 
     ## immersive MODE
-    async def main_image_binocular_zmq(self, session):
-        logging.info("[TeleVuer] Starting main_image_binocular_zmq")
+    async def main_image_binocular_dds(self, session):
+        logging.info("[TeleVuer] Starting main_image_binocular_dds")
         if self.use_hand_tracking:
             session.upsert(
                 Hands(
@@ -375,8 +428,8 @@ class TeleVuer:
             # 'jpeg' encoding should give you about 30fps with a 16ms wait in-between.
             await asyncio.sleep(1.0 / self.display_fps)
 
-    async def main_image_monocular_zmq(self, session):
-        logging.info("[TeleVuer] Starting main_image_monocular_zmq")
+    async def main_image_monocular_dds(self, session):
+        logging.info("[TeleVuer] Starting main_image_monocular_dds")
         if self.use_hand_tracking:
             session.upsert(
                 Hands(
@@ -492,15 +545,15 @@ class TeleVuer:
             await asyncio.sleep(1.0 / self.display_fps)
 
     ## ego MODE
-    async def main_image_binocular_zmq_ego(self, session):
-        logging.info("[TeleVuer] Starting main_image_binocular_zmq_ego")
+    async def main_image_binocular_dds_ego(self, session):
+        logging.info("[TeleVuer] Starting main_image_binocular_dds_ego")
         if self.use_hand_tracking:
             session.upsert(
                 Hands(
                     stream=True,
                     key="hands",
-                    hideLeft=True,
-                    hideRight=True
+                    hideLeft=False,
+                    hideRight=False
                 ),
                 to="bgChildren",
             )
@@ -548,8 +601,8 @@ class TeleVuer:
             # 'jpeg' encoding should give you about 30fps with a 16ms wait in-between.
             await asyncio.sleep(1.0 / self.display_fps)
 
-    async def main_image_monocular_zmq_ego(self, session):
-        logging.info("[TeleVuer] Starting main_image_monocular_zmq_ego")
+    async def main_image_monocular_dds_ego(self, session):
+        logging.info("[TeleVuer] Starting main_image_monocular_dds_ego")
         session.set @ Scene(
             rawChildren= [
                 CameraView(
@@ -576,8 +629,8 @@ class TeleVuer:
                 Hands(
                     stream=True,
                     key="hands",
-                    hideLeft=True,
-                    hideRight=True
+                    hideLeft=False,
+                    hideRight=False
                 ),
                 to="bgChildren",
             )
@@ -739,25 +792,25 @@ class TeleVuer:
     def left_hand_positions(self):
         """np.ndarray, shape (25, 3), left hand 25 landmarks' 3D positions."""
         with self.left_hand_position_shared.get_lock():
-            return np.array(self.left_hand_position_shared[:]).reshape(25, 3)
+            return np.array(self.left_hand_position_shared[:]).reshape(24, 3)
 
     @property
     def right_hand_positions(self):
         """np.ndarray, shape (25, 3), right hand 25 landmarks' 3D positions."""
         with self.right_hand_position_shared.get_lock():
-            return np.array(self.right_hand_position_shared[:]).reshape(25, 3)
+            return np.array(self.right_hand_position_shared[:]).reshape(24, 3)
 
     @property
     def left_hand_orientations(self):
         """np.ndarray, shape (25, 3, 3), left hand 25 landmarks' orientations (flattened 3x3 matrices, column-major)."""
         with self.left_hand_orientation_shared.get_lock():
-            return np.array(self.left_hand_orientation_shared[:]).reshape(25, 9).reshape(25, 3, 3, order="F")
+            return np.array(self.left_hand_orientation_shared[:]).reshape(24, 9).reshape(24, 3, 3, order="F")
 
     @property
     def right_hand_orientations(self):
         """np.ndarray, shape (25, 3, 3), right hand 25 landmarks' orientations (flattened 3x3 matrices, column-major)."""
         with self.right_hand_orientation_shared.get_lock():
-            return np.array(self.right_hand_orientation_shared[:]).reshape(25, 9).reshape(25, 3, 3, order="F")
+            return np.array(self.right_hand_orientation_shared[:]).reshape(24, 9).reshape(24, 3, 3, order="F")
 
     @property
     def left_hand_pinch(self):

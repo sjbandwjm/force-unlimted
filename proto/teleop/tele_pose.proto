@@ -27,7 +27,7 @@ package teleop;
 
 message TeleState {
     // right arm
-    foxglove.Pose right_ee_pose = 1;
+    repeated double right_ee_pose = 1;
     // right arm crtl
     bool right_ctrl_trigger = 2;
     double right_ctrl_trigger_value = 3;
@@ -42,7 +42,7 @@ message TeleState {
     bool right_ctrl_b_button = 9;
 
     // left arm
-    foxglove.Pose left_ee_pose = 10;
+    repeated double left_ee_pose = 10;
     // left arm crtl
     bool left_ctrl_trigger = 11;
     double left_ctrl_trigger_value = 12;
@@ -57,13 +57,26 @@ message TeleState {
     bool left_ctrl_b_button = 18;
 
     // head pose
-    foxglove.Pose head_pose = 19;
+    repeated double head_pose = 19;
 
     google.protobuf.Timestamp timestamp = 20;
 
     // base_link pose from robot coordinate
-    foxglove.Pose base_link = 21;
+    repeated double base_link = 21;
     bool start_track = 22;
 
     // TODO: hand pose
+    repeated double left_hand_position = 23;
+    repeated double left_hand_orientation = 24;
+    bool left_hand_pinch = 25;
+    double left_hand_pinch_value = 26;
+    bool left_hand_squeeze = 27;
+    double left_hand_squeeze_value = 28;
+
+    repeated double right_hand_position = 29;
+    repeated double right_hand_orientation = 30;
+    bool right_hand_pinch = 31;
+    double right_hand_pinch_value = 32;
+    bool right_hand_squeeze = 33;
+    double right_hand_squeeze_value = 34;
 }

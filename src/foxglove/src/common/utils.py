@@ -56,6 +56,8 @@ def TimeNs2GoogleTs(time_ns: int) -> Timestamp:
     return ret
 
 def Matrix2Pose(matrix: np.ndarray) -> Pose:
+    if len(matrix) == 16:
+        matrix = matrix.reshape(4, 4)
     if matrix.shape != (4, 4) or np.all(matrix[:3, :3] == 0):
         return Pose()
     # 1. 提取平移向量 (前三行，最后一列)
