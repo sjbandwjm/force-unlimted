@@ -10,14 +10,14 @@
 
 **代码仓库地址**：
 
-**infra docker 镜像：**
+**infra docker 镜像：** elu-ai-infra-registry.cn-hangzhou.cr.aliyuncs.com/ai-infra/teleop:v1.0
 
 **镜像启动命令：**
 
 <your code path>是宿主机代码绝对路径，需要用户根据自己情况修改
 
-```shell
-docker run -it --rm --name infra_ros --net=host --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /dev:/dev -v <your code path>:/root/workspace  -w /root/workspace infra_ros:v1.0 /bin/bash
+```plaintext
+docker run -it --rm --name infra_ros --net=host --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v /dev:/dev -v <your code path>:/root/workspace  -w /root/workspace teleop:v1.0 /bin/bash
 
 ```
 
@@ -25,7 +25,7 @@ docker run -it --rm --name infra_ros --net=host --privileged -e DISPLAY=$DISPLAY
 
 启动节点之前需要进入code 根目录，所有节点都依赖docker 镜像环境启动
 
-```shell
+```plaintext
 # 进入docker 容器
 docekr exec -it infra_ros /bin/bash
 
@@ -42,10 +42,11 @@ cd /root/workspace/force-unlimited
 
 **启动命令**：
 
-```shell
+```plaintext
 # 参数介绍
-# --use_hand_track 是否开启手势跟踪
-# --pub_frequency 发送摇操数据的HZ,默认30HZ
+# use_hand_track 是否开启手势跟踪
+# pub_frequency 发送摇操数据的HZ,默认30HZ
+# 例如：python3 src/teleop/src/teleop_server.py use_hand_trak=true
 
 python3 src/teleop/src/teleop_server.py
 ```
@@ -56,10 +57,10 @@ python3 src/teleop/src/teleop_server.py
 
 **启动命令**：
 
-```shell
-# --robot robot类型 目前支持 unitree_g1_29、fourier_gr1t1
+```plaintext
+# robot类型 目前支持 unitree_g1_29、fourier_gr1t1
 
-python3 src/ik/src/ik_node.py --frequency=60
+python3 src/ik/src/ik_node.py
 
 ```
 
@@ -69,11 +70,11 @@ python3 src/ik/src/ik_node.py --frequency=60
 
 **启动命令：**
 
-```shell
-# --robot robot类型 目前支持 unitree_g1_29、fourier_gr1t1
-# --use_ik_sol 是否使用IK输出的qpos，否则使用本体/sim state返回状态
+```plaintext
+# robot robot类型,目前支持 unitree_g1_29、fourier_gr1t1
+# use_ik_sol [True, False] 是否使用IK输出的qpos，否则使用本体/sim state返回状态
 
-python3 src/fk/src/fk_node.py --frequency=60
+python3 src/fk/src/fk_node.py use_ik_sol=True
 
 ```
 
@@ -85,7 +86,7 @@ python3 src/fk/src/fk_node.py --frequency=60
 
 **启动命令：**
 
-```shell
+```plaintext
 python3 src/foxglove/src/server.py
 ```
 
@@ -99,7 +100,7 @@ python3 src/foxglove/src/server.py
 
 **启动命令：**
 
-```shell
+```plaintext
 python3 src/controller/src/unitree_g1_29_controller.py --unitree_dds_fps 60 --ros_msg_fps 60
 
 ```
@@ -110,6 +111,6 @@ python3 src/controller/src/unitree_g1_29_controller.py --unitree_dds_fps 60 --ro
 
 **启动命令：**
 
-```shell
+```plaintext
 python3 src/controller/src/fourier_gr1_t1_controller.py
 ```
