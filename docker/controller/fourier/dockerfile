@@ -1,0 +1,83 @@
+FROM docker.1ms.run/ros:jazzy-ros-base-noble
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+ENV PIP_NO_CACHE_DIR=1
+
+# ---------- 重写APT源 ----------
+# RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources && \
+#     mkdir -p /etc/apt/sources.list.d && \
+#     cat > /etc/apt/sources.list << 'EOF'
+# deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse
+# deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse
+# deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-backports main restricted universe multiverse
+# deb http://security.ubuntu.com/ubuntu/ noble-security main restricted universe multiverse
+# EOF
+
+# ---------- 基础系统 ----------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        software-properties-common \
+        curl wget git sudo \
+        build-essential \
+        lsb-release \
+        ca-certificates \
+        pkg-config \
+        tzdata \
+        ffmpeg \
+        python3.12 \
+        python3.12-dev \
+        python3.12-venv \
+        python3-pip \
+        gfortran \
+        cmake \
+        pkg-config \
+        ros-jazzy-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# ---------- 创建 Python venv ----------
+RUN python3.12 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# ---------- 工作目录 ----------
+WORKDIR /root/workspace
+
+# ---------- 安装 robotpkg & pinocchio ---------- 
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL http://robotpkg.openrobots.org/packages/debian/robotpkg.asc \
+        -o /etc/apt/keyrings/robotpkg.asc && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/robotpkg.asc] \
+        http://robotpkg.openrobots.org/packages/debian/pub $(lsb_release -cs) robotpkg" \
+        > /etc/apt/sources.list.d/robotpkg.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends robotpkg-py3*-pinocchio && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# ---------- robotpkg 环境变量 ----------
+RUN echo '' >> /root/.bashrc && \
+    echo '# ===== robotpkg =====' >> /root/.bashrc && \
+    echo 'export PATH=/opt/openrobots/bin:$PATH' >> /root/.bashrc && \
+    echo 'export PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:$PKG_CONFIG_PATH' >> /root/.bashrc && \
+    echo 'export LD_LIBRARY_PATH=/opt/openrobots/lib:$LD_LIBRARY_PATH' >> /root/.bashrc && \
+    echo 'export PYTHONPATH=/opt/openrobots/lib/python3.12/site-packages:$PYTHONPATH' >> /root/.bashrc && \
+    echo 'export CMAKE_PREFIX_PATH=/opt/openrobots:$CMAKE_PREFIX_PATH' >> /root/.bashrc
+
+# ---------- source ----------
+RUN echo 'source /opt/ros/jazzy/setup.bash' >> /root/.bashrc
+
+RUN git clone https://gitee.com/monkrythree/teleoperation.git && \
+    cd teleoperation && \
+    git checkout feature/hsx/add_debug_visiable
+
+# ---------- 安装 Python 依赖 ----------
+RUN cd /root/workspace/teleoperation && \
+    pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple --no-deps
+
+COPY force-unlimted/docker/controller/fourier/fourier_requirement.txt /tmp/req.txt
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r /tmp/req.txt --timeout 120 --retries 5
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple numpy==1.26.4
+
+# ---------- 默认工作目录 ----------
+WORKDIR /root/workspace/
+
+CMD ["/bin/bash"]
